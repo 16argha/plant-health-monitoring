@@ -97,14 +97,19 @@ dataset = dataset.map(load_image, num_parallel_calls=tf.data.AUTOTUNE)
 train_size = int(0.8 * len(dataset))
 train_ds = dataset.take(train_size).batch(32).prefetch(tf.data.AUTOTUNE)
 val_ds = dataset.skip(train_size).batch(32).prefetch(tf.data.AUTOTUNE)
-# Shared backbone
+# Shared backbone (First CNN Architecture with multiple Conv2D and Dropout)
 inputs = tf.keras.Input(shape=(224, 224, 3))
 x = layers.Rescaling(1./255)(inputs)
 x = layers.Conv2D(128, 3, activation="relu")(x)
 x = layers.MaxPooling2D()(x)
 x = layers.Conv2D(64, 3, activation="relu")(x)
 x = layers.MaxPooling2D()(x)
+x = layers.Conv2D(32, 3, activation="relu")(x)
+x = layers.MaxPooling2D()(x)
+x = layers.Conv2D(16, 3, activation="relu")(x)
 x = layers.Flatten()(x)
+x = layers.Dropout(0.25)(x)  # Randomly sets 25% of neurons to 0 during training.
+x = layers.Dense(128, activation="relu")(x)
 
 # Disease classification head
 disease_head = layers.Dense(64, activation="relu")(x)
@@ -115,6 +120,7 @@ severity_head = layers.Dense(32, activation="relu")(x)
 severity_output = layers.Dense(1, activation="linear", name="severity")(severity_head)
 
 model = tf.keras.Model(inputs=inputs, outputs=[disease_output, severity_output])
+
 
 # Compile
 model.compile(
@@ -134,7 +140,7 @@ early_stopping = callbacks.EarlyStopping(patience=3, restore_best_weights=True)
 history = model.fit(
     train_ds,
     validation_data=val_ds,
-    epochs=15,   
+    epochs=25,
     callbacks=[early_stopping]
 )
 # Plot training history
@@ -151,14 +157,3 @@ plt.plot(history.history["val_severity_mae"], label="Val Severity MAE")
 plt.legend()
 plt.title("Severity MAE")
 plt.show()
-
-# Save the model
-print("Saving model...")
-model.save("paddy_disease_model.h5")
-print("Model saved as paddy_disease_model.h5")
-
-# Save the label encoder classes for later use
-import pickle
-with open('label_encoder.pkl', 'wb') as f:
-    pickle.dump(label_encoder.classes_, f)      
-    
